@@ -21,6 +21,7 @@ ensure 'currentPath',  -> path.resolve(roco.deployTo, roco.currentDir)
 ensure 'releasePath',  -> path.resolve(roco.releasesPath, ''+roco.releaseName)
 ensure 'previousReleasePath', -> path.resolve(roco.releasesPath, ''+roco.previousRelease)
 ensure 'latestReleasePath', -> path.resolve(roco.releasesPath, ''+roco.latestRelease)
+ensure 'engine',  '/usr/local/bin/node'
 ensure 'env', 'production'
 ensure 'nodeEntry', 'server.js'
 ensure 'appPort', 3001
@@ -45,7 +46,7 @@ namespace 'deploy', ->
         Pull latest changes from SCM and symlink latest release
         as current release
     """
-    task 'update', (done) -> sequence 'prepare', 'updateCode', 'symlink', done
+    task 'update', (done) -> sequence 'prepare', 'updateCode', 'symlink', 'setup:env', done
 
     task 'prepare', (done) ->
         run "ls -x #{roco.releasesPath}", (res) ->
@@ -110,6 +111,10 @@ namespace 'deploy', ->
             sudo chown -R $NAME:$NAME #{dirs}
             """, done
 
+    task 'setup:env', (done) ->
+      env_exports = ("export #{key}=#{value}" for key, value of roco.env_vars).join '\n'
+      run env_exports, done
+
     task 'setup:upstart', (done) ->
         sequence 'setup', 'writeUpstartScript', done
 
@@ -120,6 +125,10 @@ namespace 'deploy', ->
         maybePort = ''
         maybePort = "env PORT=#{roco.appPort}" if roco.appPort
 
+        if roco.env_vars
+          env_vars =  ("env #{key}=#{value}" for key, value of roco.env_vars).join '\n'
+          env_exports = ("    export #{key}" for key of roco.env_vars).join '\n'
+
         ups = """
           description "#{roco.application}"
 
@@ -128,13 +137,15 @@ namespace 'deploy', ->
 
           #{maybePort}
           #{maybeEnv}
+          #{env_vars}
 
           script
               export PORT
               export NODE_ENV
+              #{env_exports}
 
               cd #{roco.currentPath}
-              /usr/local/bin/node #{roco.currentPath}/#{roco.nodeEntry}
+              #{roco.engine} #{roco.currentPath}/#{roco.nodeEntry}
           end script
           respawn
           """
@@ -143,6 +154,6 @@ namespace 'deploy', ->
             file = roco.application
         else
             file = "#{roco.application}-#{roco.env}"
-        
+
         run "sudo echo '#{ups}' > /tmp/upstart.tmp && sudo mv /tmp/upstart.tmp /etc/init/#{file}.conf", done
 
