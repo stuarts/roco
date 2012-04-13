@@ -145,7 +145,7 @@ namespace 'deploy', ->
               #{env_exports}
 
               cd #{roco.currentPath}
-              #{roco.engine} #{roco.currentPath}/#{roco.nodeEntry}
+              #{roco.engine} #{roco.currentPath}/#{roco.nodeEntry} >> #{roco.currentPath}/log/#{roco.env}.log 2>&1
           end script
           respawn
           """
